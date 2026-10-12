@@ -1,0 +1,65 @@
+CREATE OR REPLACE FUNCTION rpc_reverse_journal(
+    p_target_header_id BIGINT,
+    p_reason TEXT
+) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+    v_orig_header journal_headers%ROWTYPE;
+    v_storno_id   BIGINT;
+    v_actor       VARCHAR(100);
+BEGIN
+    -- Ambil email pengguna dari JWT Supabase
+    v_actor := COALESCE(current_setting('[link mencurigakan dihapus]', true)::jsonb->>'email', 'authenticated_user');
+
+    -- Ambil dan kunci transaksi asli
+    SELECT * INTO v_orig_header FROM journal_headers WHERE id = p_target_header_id FOR UPDATE;
+
+    IF [link mencurigakan dihapus] IS NULL THEN
+        RAISE EXCEPTION 'Jurnal ID % tidak ditemukan.', p_target_header_id;
+    END IF;
+
+    IF v_orig_header.posting_status <> 'POSTED' THEN
+        RAISE EXCEPTION 'Hanya jurnal berstatus POSTED yang dapat dibalik/storno.';
+    END IF;
+
+    -- Penguncian Eksklusif Rantai Hash (Mencegah branching pada hash chain)
+    PERFORM pg_advisory_xact_lock(999888);
+
+    -- 1. Buat Header Jurnal Pembalik (STORNO)
+    INSERT INTO journal_headers (
+        transaction_date, reference_no, description, 
+        posting_status, created_by, reversal_of
+    ) VALUES (
+        CURRENT_DATE,
+        'STORNO-' || v_orig_header.reference_no,
+        'JURNAL PEMBALIK (STORNO): ' || p_reason || ' [Reversal of ' || v_orig_header.reference_no || ']',
+        'DRAFT',
+        v_actor,
+        [link mencurigakan dihapus]
+    ) RETURNING id INTO v_storno_id;
+
+    -- 2. Balikkan Posisi Debit dan Kredit (Swap Debit <-> Credit)
+    INSERT INTO journal_lines (header_id, account_id, debit, credit)
+    SELECT v_storno_id, account_id, credit AS debit, debit AS credit
+    FROM journal_lines
+    WHERE header_id = [link mencurigakan dihapus];
+
+    -- 3. Ubah Status Storno menjadi POSTED & Segel Hash SHA-256
+    UPDATE journal_headers
+    SET posting_status = 'POSTED',
+        posted_by = v_actor,
+        posted_at = now(),
+        prev_hash = COALESCE((SELECT hash_checksum FROM journal_headers WHERE posting_status = 'POSTED' AND id < v_storno_id ORDER BY id DESC LIMIT 1), 'GENESIS_HASH_ROOT_0000000000000000000000000000000000000000000'),
+        hash_checksum = fn_calculate_journal_hash(v_storno_id)
+    WHERE id = v_storno_id;
+
+    -- Catat ke Audit Log
+    INSERT INTO audit_log (table_name, action_type, record_id, actor_email, new_data)
+    VALUES ('journal_headers', 'REVERSAL', v_storno_id, v_actor, jsonb_build_object('reversed_header_id', [link mencurigakan dihapus], 'reason', p_reason));
+
+    RETURN jsonb_build_object(
+        'status', 'SUCCESS',
+        'storno_header_id', v_storno_id,
+        'storno_ref_no', 'STORNO-' || v_orig_header.reference_no
+    );
+END;
+$$;
