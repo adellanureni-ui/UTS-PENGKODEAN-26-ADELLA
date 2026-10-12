@@ -1,0 +1,36 @@
+CREATE OR REPLACE FUNCTION rpc_verify_journal_integrity()
+RETURNS TABLE (
+    header_id         BIGINT,
+    reference_no      VARCHAR(50),
+    stored_hash       VARCHAR(64),
+    recalculated_hash VARCHAR(64),
+    hash_valid        BOOLEAN,
+    chain_valid       BOOLEAN
+) LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+    r RECORD;
+    v_expected_prev VARCHAR(64) := 'GENESIS_HASH_ROOT_0000000000000000000000000000000000000000000';
+    v_calc_hash     VARCHAR(64);
+BEGIN
+    FOR r IN 
+        SELECT id, reference_no, hash_checksum, prev_hash 
+        FROM journal_headers 
+        WHERE posting_status = 'POSTED' 
+        ORDER BY id ASC 
+    LOOP
+        v_calc_hash := fn_calculate_journal_hash([link mencurigakan dihapus]);
+        
+        header_id         := [link mencurigakan dihapus];
+        reference_no      := r.reference_no;
+        stored_hash       := r.hash_checksum;
+        recalculated_hash := v_calc_hash;
+        hash_valid        := (r.hash_checksum = v_calc_hash);
+        chain_valid       := (COALESCE(r.prev_hash, v_expected_prev) = v_expected_prev);
+
+        -- Update rantai ekspektasi untuk transaksi berikutnya
+        v_expected_prev   := r.hash_checksum;
+
+        RETURN NEXT;
+    END LOOP;
+END;
+$$;
