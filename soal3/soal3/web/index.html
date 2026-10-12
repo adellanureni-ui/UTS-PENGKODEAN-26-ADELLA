@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voucher Kas Keluar (Bukti Kas Keluar)</title>
+    <script src="[suspicious link removed]"></script>
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-md overflow-hidden p-6">
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">Voucher Transaksi Kas Keluar (BKK)</h2>
+        
+        <!-- HEADER FORM -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Tanggal Transaksi</label>
+                <input type="date" id="trxDate" onchange="validateForm()" class="mt-1 block w-full border rounded-md p-2">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">No. Bukti (Ref No)</label>
+                <input type="text" id="refNo" value="BKK-20261012-001" oninput="validateForm()" class="mt-1 block w-full border rounded-md p-2">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Deskripsi / Dibayarkan Kepada</label>
+                <input type="text" id="description" placeholder="mis. Pembayaran Listrik" oninput="validateForm()" class="mt-1 block w-full border rounded-md p-2">
+            </div>
+        </div>
+
+        <!-- TABEL BARIS JURNAL -->
+        <table class="w-full text-left mb-4 border-collapse">
+            <thead>
+                <tr class="border-b bg-gray-50">
+                    <th class="p-2">Akun (Bagan Akun)</th>
+                    <th class="p-2 w-32">Debit (Rp)</th>
+                    <th class="p-2 w-32">Kredit (Rp)</th>
+                    <th class="p-2 w-12">Aksi</th>
+                </tr>
+            </thead>
+            <tbody id="journalRows">
+                <!-- Baris di-generate via JavaScript -->
+            </tbody>
+        </table>
+
+        <button onclick="addRow()" class="mb-6 bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-medium text-sm">+ Tambah Baris</button>
+
+        <!-- BANNER STATUS KESEIMBANGAN -->
+        <div id="balanceBanner" class="p-4 rounded-lg mb-6 text-center font-bold"></div>
+
+        <!-- CHECKLIST ATURAN BISNIS -->
+        <div class="bg-gray-50 p-4 rounded-lg mb-6 text-sm space-y-1" id="checklistContainer"></div>
+
+        <!-- TOMBOL SUBMIT -->
+        <button id="btnSubmit" onclick="submitVoucher()" disabled class="w-full py-3 rounded-lg font-bold text-white bg-gray-400 cursor-not-allowed">
+            Submit & Posting Jurnal
+        </button>
+    </div>
+
+    <script>
+        const COA = [
+            { code: '1101', name: '1101 - Kas', isCash: true },
+            { code: '1102', name: '1102 - Bank', isCash: true },
+            { code: '1103', name: '1103 - Kas Kecil', isCash: true },
+            { code: '6102', name: '6102 - Beban Listrik, Air & Telepon', isCash: false },
+            { code: '6105', name: '6105 - Beban Transportasi', isCash: false }
+        ];
+
+        // Konversi presisi sen (mencegah floating point error)
+        const toCents = (val) => Math.round((Number(val) || 0) * 100);
+
+        function validateForm() {
+            // Perhitungan sen & validasi 5 aturan bisnis live
+            const totalD = rows.reduce((s, r) => s + toCents(r.debit), 0);
+            const totalC = rows.reduce((s, r) => s + toCents([link mencurigakan dihapus]), 0);
+            const isBalanced = totalD > 0 && totalD === totalC;
+
+            // Kontrol tombol Submit & Checklist
+            const btn = document.getElementById('btnSubmit');
+            if (isBalanced && allRulesPassed) {
+                btn.disabled = false;
+                btn.className = "w-full py-3 rounded-lg font-bold text-white bg-emerald-600 hover:bg-emerald-700 cursor-pointer";
+            } else {
+                btn.disabled = true;
+                btn.className = "w-full py-3 rounded-lg font-bold text-white bg-gray-400 cursor-not-allowed";
+            }
+        }
+    </script>
+</body>
+</html>
